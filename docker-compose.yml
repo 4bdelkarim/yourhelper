@@ -1,0 +1,54 @@
+# docker-compose.yml — phase 6 (Docker) du tuteur RAG
+# ============================================================
+# Deux services : api (FastAPI + ChromaDB embarqué) et web (Next.js).
+# Ollama reste SUR L'HÔTE (choix utilisateur) : les modèles déjà téléchargés
+# (~10 Go) et l'accès GPU natif sont conservés. Le conteneur l'atteint via
+# host.docker.internal (host-gateway requis sous Linux).
+
+name: rag-tutor
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    # Le .env du projet est utilisé tel quel (optionnel : valeurs par défaut
+    # de settings.py sinon). OLLAMA_HOST est FORCE ci-dessous : dans le
+    # conteneur 127.0.0.1 désignerait le conteneur, pas l'hôte.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OLLAMA_HOST: http://host.docker.internal:11434
+      HF_HOME: /app/.hf-cache
+    volumes:
+      # Index ChromaDB existant (~37 Mo) réutilisé tel quel, persistant.
+      - ./chroma_db:/app/chroma_db
+      # Cache HuggingFace du reranker bge-reranker-v2-m3 (~600 Mo au 1er appel).
+      - ./.hf-cache:/app/.hf-cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      # /api/health répond 200 même en "degraded" : sonde de vie d'uvicorn.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        # URL appelée par le navigateur (depuis la machine hôte).
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

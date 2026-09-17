@@ -1,0 +1,29 @@
+# VCS
+.git
+
+# Environnements et caches volumineux
+.venv
+node_modules
+**/node_modules
+__pycache__
+**/__pycache__
+.pytest_cache
+.deepeval
+.hf-cache
+
+# Artefacts runtime (reconstruits via volume / make ingest)
+chroma_db
+_glmocr_json
+
+# Données et documents hors runtime API
+data
+rag-tutor-rapport
+
+# Docker lui-même
+Dockerfile*
+docker-compose.yml
+.dockerignore
+
+# Local
+.env
+eval_history.jsonl
