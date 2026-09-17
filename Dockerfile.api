@@ -1,0 +1,41 @@
+# Dockerfile.api — backend FastAPI du tuteur RAG (rag-tutor)
+# ============================================================
+# Points d'attention :
+#   - torch CPU : pyproject.toml cible l'index CUDA cu126 sur Linux (~2,5 Go de
+#     wheels). On pré-installe torch depuis l'index CPU AVANT `pip install -e .`
+#     pour que la dépendance soit déjà satisfaite et jamais retéléchargée
+#     (image ~4x plus légère, comportement identique : le projet tourne déjà
+#     avec CUDA_VISIBLE_DEVICES vide, cf. Makefile / .env.example).
+#   - Un SEUL worker uvicorn : ChromaDB est un client embarqué dans le process
+#     (contrainte documentée dans apps/api/routes/chat.py).
+#   - WORKDIR /app = racine du projet : DB_DIR=chroma_db reste relatif au CWD,
+#     exactement comme en local (bind-mount via docker-compose).
+#   - Le reranker bge-reranker-v2-m3 (~600 Mo) se télécharge au premier appel
+#     dans HF_HOME=/app/.hf-cache, persisté par un volume compose.
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_CONFIG_FILE=/dev/null \
+    HF_HOME=/app/.hf-cache
+
+WORKDIR /app
+
+# --- Dépendances (couche cache : pyproject/ src/ changent rarement) ---
+COPY pyproject.toml ./
+COPY src/ ./src/
+
+RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.13.0" \
+ && pip install -e . \
+ && pip install "uvicorn>=0.30.0"
+
+# --- Code applicatif (couche séparée : change souvent, ne casse pas le cache pip) ---
+COPY apps/api/ ./apps/api/
+
+EXPOSE 8000
+
+# python -m (et non l'exécutable seul) : /app reste sur sys.path, les imports
+# "apps.api.*" se résolvent comme avec la commande uvicorn documentée en local.
+CMD ["python", "-m", "uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

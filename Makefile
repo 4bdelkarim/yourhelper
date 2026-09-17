@@ -17,7 +17,7 @@
 #   make eval MODE=hybrid_rerank
 #   make clean
 
-.PHONY: help setup ingest chat tutor eval clean
+.PHONY: help setup ingest chat tutor eval clean docker-build docker-up docker-down docker-logs docker-clean
 
 # ============================================================
 # CONFIG
@@ -78,6 +78,10 @@ help:
 	@echo "  make tutor       Lance le CLI conversationnel socratique"
 	@echo "  make eval        Lance l'évaluation complète (Ragas + retrieval)"
 	@echo "  make clean       Nettoie l'index ChromaDB et les caches"
+	@echo "  make docker-up   Build + lance api:8000 et web:3000 en Docker"
+	@echo "  make docker-down Stoppe les conteneurs Docker"
+	@echo "  make docker-logs Suit les logs des conteneurs"
+	@echo "  make docker-clean Supprime conteneurs + images Docker du projet"
 	@echo ""
 	@echo "$(YELLOW)Variables (avec valeurs par défaut) :$(RESET)"
 	@echo "  DIR=$(DIR)            Dossier des fichiers .md à ingérer"
@@ -185,6 +189,36 @@ tutor:
 eval:
 	@echo "$(CYAN)Lancement de l'évaluation (mode=$(MODE))...$(RESET)"
 	@$(PYTHON) -m rag_tutor.evaluation.evaluate $(DATASET) --retrieval-mode=$(MODE)
+
+# ============================================================
+# DOCKER (phase 6 — api:8000 + web:3000, Ollama sur l'hôte)
+# ============================================================
+
+# Prérequis : Ollama actif sur l'hôte (curl présent au setup), chroma_db/
+# construit via `make ingest` (bind-mounté tel quel dans le conteneur).
+
+docker-build:
+	@echo "$(CYAN)Build des images Docker (api + web)...$(RESET)"
+	docker compose build
+	@echo "$(GREEN)✅ Images construites.$(RESET)"
+
+docker-up:
+	@echo "$(CYAN)Lancement : api:8000 (Ollama hôte via host.docker.internal) + web:3000$(RESET)"
+	docker compose up -d --build
+	@echo "$(GREEN)✅ Up. Healthcheck : http://localhost:8000/api/health — Web : http://localhost:3000$(RESET)"
+
+docker-down:
+	@echo "$(YELLOW)Arrêt des conteneurs...$(RESET)"
+	docker compose down
+	@echo "$(GREEN)✅ Down (chroma_db/ et .hf-cache/ préservés : volumes bind-mount).$(RESET)"
+
+docker-logs:
+	docker compose logs -f
+
+docker-clean:
+	@echo "$(YELLOW)Suppression conteneurs + images du projet...$(RESET)"
+	docker compose down --rmi local --remove-orphans
+	@echo "$(GREEN)✅ Nettoyage Docker terminé (chroma_db/ et .hf-cache/ intacts).$(RESET)"
 
 # ============================================================
 # CLEAN
