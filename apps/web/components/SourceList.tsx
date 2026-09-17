@@ -17,14 +17,16 @@ export default function SourceList({ sources }: { sources: Source[] }) {
       </p>
       <ul className="mt-1 space-y-1">
         {sources.map((s, i) => (
-          <li key={i} className="text-sm text-slate-600">
-            <span className="mr-1 text-slate-400">•</span>
+          <li key={i} className="text-sm leading-snug text-slate-600">
+            <span className="mr-1 text-slate-400" aria-hidden="true">
+              •
+            </span>
             {s.source_url ? (
               <a
                 href={s.source_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-700 underline decoration-dotted hover:text-blue-900"
+                className="text-univ-700 underline decoration-dotted underline-offset-2 hover:text-univ-600"
               >
                 {s.label}
               </a>
