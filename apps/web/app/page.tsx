@@ -2,78 +2,96 @@
 
 import { useEffect, useRef, useState } from "react";
 import ChatMessage, { Message } from "@/components/ChatMessage";
-import { ApiError, HistoryTurn, sendChat } from "@/lib/api";
+import { ApiError, HistoryTurn, sendChatStream } from "@/lib/api";
 
 /**
- * Page de chat minimale — priorité fonctionnement > esthétique.
+ * Page de chat — version SSE (phase 5).
  *
  * Conversation 100 % côté React (aucune persistance serveur, aucun state
- * manager externe) :
- *   user message -> POST /api/chat (history = tours précédents)
- *                -> assistant response + sources -> messages[]
+ * manager externe). Différence avec la version JSON :
+ *   - les tokens sont affichés AU FUR ET À MESURE (sendChatStream) ;
+ *   - les sources s'affichent dès l'event `meta` (fin du retrieval, avant le
+ *     premier token) — plus d'attente de 30-90 s sans feedback ;
+ *   - un tour refusé arrive aussi en `meta` (refused:true, aucun token).
  *
- * Après chaque réponse, le tour est ajouté à l'historique (user + assistant),
- * ce qui permet au backend de résoudre les anaphores au tour suivant
- * (« Et comment le compare-t-on au GRU ? »).
+ * L'historique transmis au backend reste identique (tours précédents, refus
+ * exclus) : la résolution des anaphores côté RAG est inchangée.
  */
 export default function HomePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string>("");
-  const [loading, setLoading] = useState(false);
+  const [pending, setPending] = useState<Message | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, pending]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const message = input.trim();
-    if (!message || loading) return;
+    if (!message || pending) return;
 
     const userMsg: Message = { role: "user", content: message };
     const history: HistoryTurn[] = messages
       .filter((m) => !m.refused)
       .map((m) => ({ role: m.role, content: m.content }));
 
+    // Objet LOCAL accumulé par les handlers SSE (appelés séquentiellement
+    // pendant l'await). Les updaters React restent purs : aucun setState
+    // imbriqué dans un updater — React StrictMode (dev) invoque les updaters
+    // deux fois, ce qui dupliquait la promotion finale du message.
+    const assistantMsg: Message = { role: "assistant", content: "" };
+
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    setLoading(true);
     setError(null);
+    // Tour en cours : les sources arriveront avec `meta`, le texte token par token.
+    setPending({ ...assistantMsg });
 
     try {
-      const resp = await sendChat({
-        message,
-        conversationId: conversationId,
-        history,
-      });
-      setConversationId(resp.conversation_id);
-      setMessages((prev) => [
-        ...prev,
+      const { latencyMs } = await sendChatStream(
         {
-          role: "assistant",
-          content: resp.answer,
-          refused: resp.refused,
-          sources: resp.sources,
-          latencyMs: resp.meta?.latency_ms,
+          message,
+          conversationId: conversationId,
+          history,
         },
-      ]);
+        {
+          onMeta: (meta) => {
+            assistantMsg.refused = meta.refused;
+            assistantMsg.sources = meta.sources;
+            setConversationId(meta.conversation_id);
+            setPending({ ...assistantMsg });
+          },
+          onToken: (delta) => {
+            assistantMsg.content += delta;
+            setPending({ ...assistantMsg });
+          },
+        },
+      );
+      // Flux terminé : UNE seule promotion, via des updaters purs.
+      setPending(null);
+      setMessages((prev) => [...prev, { ...assistantMsg, latencyMs }]);
     } catch (err) {
+      // Erreur après ouverture du flux : garder les tokens déjà affichés.
+      setPending(null);
+      if (assistantMsg.content) {
+        setMessages((prev) => [...prev, { ...assistantMsg }]);
+      }
       const msg =
         err instanceof ApiError
           ? `${err.message}${err.code !== "http_error" ? ` (${err.code})` : ""}`
           : "Erreur inattendue.";
       setError(msg);
-    } finally {
-      setLoading(false);
     }
   }
 
   function resetConversation() {
     setMessages([]);
     setConversationId("");
+    setPending(null);
     setError(null);
   }
 
@@ -95,7 +113,7 @@ export default function HomePage() {
       </header>
 
       <div className="flex-1 space-y-4 overflow-y-auto py-4">
-        {messages.length === 0 && !loading && (
+        {messages.length === 0 && !pending && (
           <div className="mt-16 text-center text-slate-500">
             <p className="text-lg">
               Posez une question sur le cours de machine learning.
@@ -110,18 +128,8 @@ export default function HomePage() {
           <ChatMessage key={i} message={m} />
         ))}
 
-        {loading && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
-              <p className="text-sm text-slate-500">
-                Le tuteur réfléchit…
-                <span className="ml-1 text-xs text-slate-400">
-                  (recherche dans le corpus + génération locale, cela peut
-                  prendre 30 à 90 s)
-                </span>
-              </p>
-            </div>
-          </div>
+        {pending && (
+          <ChatMessage message={pending} streaming />
         )}
 
         {error && (
@@ -139,16 +147,16 @@ export default function HomePage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Votre question…"
-          disabled={loading}
+          disabled={!!pending}
           maxLength={2000}
           className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none disabled:opacity-50"
         />
         <button
           type="submit"
-          disabled={loading || !input.trim()}
+          disabled={!!pending || !input.trim()}
           className="rounded-xl bg-blue-600 px-5 py-2.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? "…" : "Envoyer"}
+          {pending ? "…" : "Envoyer"}
         </button>
       </form>
     </main>
