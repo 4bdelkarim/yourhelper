@@ -15,8 +15,7 @@ silencieusement entre l'ecriture et la lecture.
 import json
 from pathlib import Path
 
-DB_DIR          = "chroma_db"
-COLLECTION_NAME = "cours_ml_fig"
+from ..settings import COLLECTION_NAME, DB_DIR  # noqa: F401  (réexport pour compat)
 
 # ChromaDB refuse un .add() au-dela d'un certain nombre d'elements en un seul appel
 # (limite interne variable selon la version, ex. 5461 constate) -> on insere par lots,

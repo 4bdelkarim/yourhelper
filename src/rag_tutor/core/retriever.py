@@ -40,19 +40,23 @@ Prerequis : python -m rag_tutor.ingestion.ingest data/normalized/   (cree chroma
 Dependances : rank-bm25, sentence-transformers (deps du projet, cf. pyproject.toml)
 """
 
+import logging
+
+from ..settings import RERANKER_MODEL, RETRIEVAL_MODE
 from .vector_store import get_collection, load_parents
 from .embeddings import BGEEmbeddings
+
+logger = logging.getLogger(__name__)
 
 # =====================================================
 # CONFIG (retrieval uniquement -- DB_DIR/COLLECTION/EMBED_MODEL viennent
 # desormais de vector_store.py / embeddings.py, plus dupliques ici)
 # =====================================================
 
-# bge-reranker-v2-m3 : multilingue -> meilleur en FR. Necessite HF au premier lancement
-# (cf. note RERANKER ci-dessus) -- aucune alternative Ollama native a ce jour.
-RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
-
-MODE              = "hybrid_rerank"   # "dense" | "hybrid" | "hybrid_rerank"
+# bge-reranker-v2-m3 : multilingue -> meilleur en FR. Cache HF requis au
+# premier lancement (aucune alternative Ollama native). Valeur lue depuis
+# settings (env RERANKER_MODEL), réexportée ici pour compat.
+MODE = RETRIEVAL_MODE   # "dense" | "hybrid" | "hybrid_rerank"
 BM25_K            = 20                # candidats BM25
 DENSE_K           = 20                # candidats denses
 RERANK_CANDIDATES = 40                # plafond de paires passees au reranker
@@ -127,19 +131,17 @@ def _reranker():
                         pass
                 if attempt < 3:
                     wait = 3 * attempt
-                    print(
-                        f"\n  [retry {attempt}/3] Cache corrompu purge, "
-                        f"nouvelle tentative dans {wait}s...",
-                        file=sys.stderr, flush=True,
+                    logger.warning(
+                        "[retry %d/3] Cache corrompu purge, nouvelle tentative dans %ds...",
+                        attempt, wait,
                     )
                     time.sleep(wait)
                     continue
             elif attempt < 3:
                 wait = 3 * attempt
-                print(
-                    f"\n  [retry {attempt}/3] Echec de chargement ({e}), "
-                    f"nouvelle tentative dans {wait}s...",
-                    file=sys.stderr, flush=True,
+                logger.warning(
+                    "[retry %d/3] Echec de chargement du reranker (%s), "
+                    "nouvelle tentative dans %ds...", attempt, e, wait,
                 )
                 time.sleep(wait)
                 continue
@@ -147,10 +149,10 @@ def _reranker():
             last_error = e
             if attempt < 3:
                 wait = 3 * attempt
-                print(
-                    f"\n  [retry {attempt}/3] Erreur inattendue ({type(e).__name__}: {e}), "
-                    f"nouvelle tentative dans {wait}s...",
-                    file=sys.stderr, flush=True,
+                logger.warning(
+                    "[retry %d/3] Erreur inattendue du reranker "
+                    "(%s: %s), nouvelle tentative dans %ds...",
+                    attempt, type(e).__name__, e, wait,
                 )
                 time.sleep(wait)
                 continue
@@ -158,17 +160,14 @@ def _reranker():
     # Toutes les tentatives ont echoue -> degradation definitive
     _RERANK_UNAVAILABLE = True
     RERANKER_ACTIVE = False
-    print(
-        f"\n⚠️  Reranker '{RERANKER_MODEL}' INDISPONIBLE apres 3 tentatives.\n"
-        f"   Derniere erreur : {type(last_error).__name__}: {last_error}\n"
-        f"   -> DEGRADATION AUTOMATIQUE vers le mode 'hybrid' (fusion RRF sans rerank).\n"
-        f"   -> La qualite du rerank (fidelite ~0.88) sera reduite (~0.69), mais le systeme fonctionne.\n"
-        f"\n"
-        f"   Pour retablir le reranker complet :\n"
-        f"     1. Verifie ta connexion Internet (le modele ~1 Go sera telecharge une fois).\n"
-        f"     2. Lance : python scripts/fetch_reranker.py\n"
-        f"     3. En dernier recours : pip install --upgrade sentence-transformers transformers\n",
-        file=sys.stderr, flush=True,
+    logger.warning(
+        "Reranker '%s' INDISPONIBLE apres 3 tentatives (derniere erreur : "
+        "%s: %s). DEGRADATION AUTOMATIQUE vers le mode 'hybrid' (fusion RRF "
+        "sans rerank) : qualite reduite (~0.69 au lieu de ~0.88), le systeme "
+        "fonctionne. Retablir : 1) connexion Internet, 2) python "
+        "scripts/fetch_reranker.py, 3) pip install --upgrade "
+        "sentence-transformers transformers.",
+        RERANKER_MODEL, type(last_error).__name__, last_error,
     )
     return None
 

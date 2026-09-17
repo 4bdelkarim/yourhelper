@@ -25,6 +25,14 @@ Thumbs.db
 # Historique d'évaluation (append-only, local)
 eval_history.jsonl
 
+# Artefacts d'évaluation DeepEval (local, hors runtime)
+.deepeval/
+
+# Index ChromaDB — artefact RUNTIME volumineux (~37 Mo) modifié à chaque accès :
+# reste sur disque, jamais versionné (reconstruisible via make ingest ;
+# volume Docker bind-mount en phase 6).
+chroma_db/
+
 # Sortie intermediaire de l'extraction PDF (crops de figures GLM-OCR)
 _glmocr_json/
 

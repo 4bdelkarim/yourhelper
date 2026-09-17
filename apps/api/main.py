@@ -15,6 +15,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routes import chat as chat_routes
 from apps.api.routes import system as system_routes
+from rag_tutor import settings
+
+# Logs rag_tutor (degradation reranker, retries...) : niveau LOG_LEVEL
+# (defaut WARNING) — cf. settings.py. Idempotent.
+settings.configure_logging()
 
 app = FastAPI(
     title="RAG Tutor API",

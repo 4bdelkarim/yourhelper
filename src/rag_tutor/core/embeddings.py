@@ -13,11 +13,7 @@ de recherche. Ne jamais recreer une deuxieme implementation ailleurs :
 retriever.py doit importer BGEEmbeddings d'ICI, pas en refaire une.
 """
 
-EMBEDDING_MODEL = "bge-m3"    # nom du modele Ollama (cf. `ollama list`) -- PAS un repo HuggingFace
-OLLAMA_HOST = "http://127.0.0.1:11434"   # instance Ollama principale -- port 11434 confirme actif.
-                                          # Le client ollama.Client() utilise ce host EXACT, quoi que le reste
-                                          # de l'environnement essaie de resoudre en implicite (OLLAMA_HOST du
-                                          # shell, etc.). A changer ICI SEULEMENT si l'instance bouge.
+from ..settings import EMBEDDING_MODEL, OLLAMA_HOST  # noqa: F401  (réexport pour compat)
 
 
 class BGEEmbeddings:
