@@ -9,8 +9,21 @@ export interface Message {
   latencyMs?: number;
 }
 
-export default function ChatMessage({ message }: { message: Message }) {
+/**
+ * `streaming` : le tour est encore en cours (POST /api/chat/stream) —
+ * affiche un curseur clignotant tant qu'aucun token n'est arrivé (phase
+ * retrieval : les sources n'ont pas encore été reçues), puis les tokens
+ * au fur et à mesure avec un curseur en fin de texte.
+ */
+export default function ChatMessage({
+  message,
+  streaming = false,
+}: {
+  message: Message;
+  streaming?: boolean;
+}) {
   const isUser = message.role === "user";
+  const awaitingFirstToken = streaming && !message.content;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -28,7 +41,22 @@ export default function ChatMessage({ message }: { message: Message }) {
             {message.refused ? "Tuteur — refus" : "Tuteur"}
           </p>
         )}
-        <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+        {awaitingFirstToken ? (
+          <p className="text-sm text-slate-500">
+            Recherche dans le corpus…
+            <span className="ml-1 text-xs text-slate-400">
+              (reformulation + retrieval + reranker, 15 à 30 s)
+            </span>
+            <span className="ml-1 inline-block h-3 w-1.5 animate-pulse bg-slate-400 align-middle" />
+          </p>
+        ) : (
+          <p className="whitespace-pre-wrap leading-relaxed">
+            {message.content}
+            {streaming && (
+              <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-slate-400 align-middle" />
+            )}
+          </p>
+        )}
 
         {message.refused && (
           <p className="mt-2 text-xs text-amber-700">
@@ -41,7 +69,7 @@ export default function ChatMessage({ message }: { message: Message }) {
           <SourceList sources={message.sources} />
         )}
 
-        {!isUser && message.latencyMs != null && (
+        {!isUser && !streaming && message.latencyMs != null && (
           <p className="mt-2 text-[11px] text-slate-400">
             {(message.latencyMs / 1000).toFixed(1)} s
           </p>
