@@ -1,1 +1,49 @@
 @import "tailwindcss";
+
+/*
+ * Identité visuelle — outil académique (inspiration institutionnelle française).
+ * Palette sobre : bleu institutionnel profond en accent, fond neutre clair,
+ * texte gris foncé quasi-noir. Aucune couleur décorative.
+ */
+@theme {
+  /* Bleu institutionnel (#1A2E5C) décliné en mini-échelle */
+  --color-univ-50: #f0f3fa;
+  --color-univ-100: #e8edf7;
+  --color-univ-200: #c9d4ec;
+  --color-univ-300: #9db1d9;
+  --color-univ-500: #3b5ba5;
+  --color-univ-600: #2a4480;
+  --color-univ-700: #1a2e5c;
+  --color-univ-800: #142347;
+
+  /* Fond neutre clair */
+  --color-paper: #f8f9fa;
+
+  /* Stack système par défaut (Inter si installée sur la machine) */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/*
+ * Accessibilité : focus TOUJOURS visible au clavier (obligations des sites
+ * publics). Les composants peuvent affiner avec ring-* mais ce filet global
+ * garantit qu'aucun élément interactif n'est invisible au clavier.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-univ-700);
+  outline-offset: 2px;
+}
+
+/* Curseur de streaming : clignotement net (step), pas une pulsation floue */
+@keyframes caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+.caret-blink {
+  animation: caret-blink 1.1s step-end infinite;
+}

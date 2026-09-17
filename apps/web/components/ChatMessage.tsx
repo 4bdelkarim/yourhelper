@@ -9,11 +9,20 @@ export interface Message {
   latencyMs?: number;
 }
 
+/** Curseur de streaming — clignotement net (animation CSS step, cf. globals.css). */
+function Caret() {
+  return (
+    <span
+      aria-hidden="true"
+      className="caret-blink ml-0.5 inline-block h-4 w-[2px] bg-univ-700 align-middle"
+    />
+  );
+}
+
 /**
  * `streaming` : le tour est encore en cours (POST /api/chat/stream) —
- * affiche un curseur clignotant tant qu'aucun token n'est arrivé (phase
- * retrieval : les sources n'ont pas encore été reçues), puis les tokens
- * au fur et à mesure avec un curseur en fin de texte.
+ * état explicite pendant le retrieval (« Recherche dans le corpus… », jamais
+ * un spinner vague), puis tokens au fur et à mesure avec curseur.
  */
 export default function ChatMessage({
   message,
@@ -28,33 +37,32 @@ export default function ChatMessage({
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+        className={`max-w-[85%] rounded-lg px-4 py-3 ${
           isUser
-            ? "bg-blue-600 text-white"
+            ? "border border-univ-200 bg-univ-100 text-univ-800"
             : message.refused
               ? "border border-amber-300 bg-amber-50 text-amber-900"
-              : "bg-white text-slate-900 shadow-sm"
+              : "border border-slate-200 bg-white text-slate-800 shadow-sm"
         }`}
       >
         {!isUser && (
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {message.refused ? "Tuteur — refus" : "Tuteur"}
           </p>
         )}
+
         {awaitingFirstToken ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-600">
             Recherche dans le corpus…
             <span className="ml-1 text-xs text-slate-400">
               (reformulation + retrieval + reranker, 15 à 30 s)
-            </span>
-            <span className="ml-1 inline-block h-3 w-1.5 animate-pulse bg-slate-400 align-middle" />
+            </span>{" "}
+            <Caret />
           </p>
         ) : (
           <p className="whitespace-pre-wrap leading-relaxed">
             {message.content}
-            {streaming && (
-              <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-slate-400 align-middle" />
-            )}
+            {streaming && <Caret />}
           </p>
         )}
 
