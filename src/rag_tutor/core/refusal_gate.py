@@ -33,8 +33,9 @@ API publique :
 # refuse de repondre. Le reranker donne des logits (pas des probabilites) —
 # l'echelle approximative est [-10, +10], les scores > 0 indiquent une pertinence
 # positive. Valeur CALIBREE via evaluation/calibrate.py sur eval/test_set_v2.json
-# (mode hybrid_rerank) — cf. eval/reranker_calibration.json.
-RERANKER_REFUSAL_THRESHOLD = 0.1119
+# (mode hybrid_rerank) — cf. eval/reranker_calibration.json. Configurable via
+# RERANKER_REFUSAL_THRESHOLD dans l'environnement (cf. ../settings.py).
+from ..settings import RERANKER_REFUSAL_THRESHOLD
 
 
 def should_refuse_reranker(hits: list[dict], threshold: float = RERANKER_REFUSAL_THRESHOLD) -> bool:

@@ -21,23 +21,25 @@ AUCUNE ambiguite sur le serveur contacte -- cf. embeddings.py, meme principe.
 
 from collections.abc import Iterator
 
-GEN_MODEL = "qwen2.5:14b"   # aligne sur les modeles pulles sur Colab (differe du JUDGE_MODEL d'evaluate.py)
-MAX_TOKENS = 900             # H100 disponible desormais -- 400 (contrainte historique CPU-only/Colab) coupait
-                              # les reponses en plein mot (confirme via chat.py, ex. "...produit la pr").
-                              # 900 laisse la place a une explication complete sans etre demesure ; remonter
-                              # encore si des reponses continuent d'etre tronquees sur des questions complexes.
-NUM_CTX = 24576              # contexte reduit de 32768 (defaut modele) a 24576 : economise ~25% de KV cache
-                              # par slot, stocke ~80K caracteres (~25K tokens en moyenne), suffisant pour les
-                              # parents retrieves (max ~80K caracteres/parent). Si des reponses sont tronquees
-                              # en amont (contexte coupe avant la generation), remonter a 32768.
-OLLAMA_HOST = "http://127.0.0.1:11434"   # instance Ollama principale -- port 11434 confirme actif.
-                              # cf. embeddings.py, meme raison
+from ..settings import (
+    GEN_MODEL,
+    KEEP_ALIVE,
+    MAX_TOKENS,
+    NUM_CTX,
+    OLLAMA_HOST,
+    OLLAMA_TIMEOUT,
+)
+
+# Configuration (modèles, limites, host, timeout) : voir ../settings.py — SEUL
+# point de configuration du package, lu depuis l'environnement (défauts =
+# valeurs historiques). Les noms sont réexportés ici pour compat totale avec
+# le code existant (CLI, évaluation, API) qui lit GEN_MODEL, OLLAMA_HOST, etc.
 
 
 def chat(system_prompt: str, user_message: str, model: str = GEN_MODEL,
          temperature: float = 0.2, max_tokens: int = MAX_TOKENS,
          host: str = OLLAMA_HOST, num_ctx: int | None = NUM_CTX,
-         keep_alive: str = "30m") -> str:
+         keep_alive: str = KEEP_ALIVE) -> str:
     """Appel simple : system + user -> texte de reponse (pas de streaming, pas d'historique).
 
     Parametres
@@ -47,7 +49,12 @@ def chat(system_prompt: str, user_message: str, model: str = GEN_MODEL,
         Reduit de 32768 (defaut modele) a 24576 par defaut pour economiser du KV
         cache. Mettre None pour utiliser le defaut du modele."""
     import ollama
-    client = ollama.Client(host=host)
+    # OLLAMA_TIMEOUT (settings.py) : None = comportement historique sans
+    # timeout ; valeur définie -> transmise au client (kwargs httpx).
+    client_kwargs = {"host": host}
+    if OLLAMA_TIMEOUT is not None:
+        client_kwargs["timeout"] = OLLAMA_TIMEOUT
+    client = ollama.Client(**client_kwargs)
     opts = {"temperature": temperature, "num_predict": max_tokens}
     if num_ctx is not None:
         opts["num_ctx"] = num_ctx
@@ -76,7 +83,7 @@ def chat(system_prompt: str, user_message: str, model: str = GEN_MODEL,
 def chat_stream(system_prompt: str, user_message: str, model: str = GEN_MODEL,
                 temperature: float = 0.2, max_tokens: int = MAX_TOKENS,
                 host: str = OLLAMA_HOST, num_ctx: int | None = NUM_CTX,
-                keep_alive: str = "30m") -> Iterator[str]:
+                keep_alive: str = KEEP_ALIVE) -> Iterator[str]:
     """Version streaming de chat() : yield chaque token des qu'il est genere par Ollama.
     Meme signature que chat(), mais retourne un generateur de str.
 
@@ -85,7 +92,10 @@ def chat_stream(system_prompt: str, user_message: str, model: str = GEN_MODEL,
             print(token, end="", flush=True)
     """
     import ollama
-    client = ollama.Client(host=host)
+    client_kwargs = {"host": host}
+    if OLLAMA_TIMEOUT is not None:
+        client_kwargs["timeout"] = OLLAMA_TIMEOUT
+    client = ollama.Client(**client_kwargs)
     opts = {"temperature": temperature, "num_predict": max_tokens}
     if num_ctx is not None:
         opts["num_ctx"] = num_ctx
