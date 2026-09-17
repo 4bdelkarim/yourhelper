@@ -41,3 +41,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+# Racine sur le path : les tests importent apps.api.* et les fixtures patchent
+# le namespace du use case. Suite rapide (RAG simulé, aucun réseau/modèle).
+pythonpath = ["."]
+testpaths = ["tests"]

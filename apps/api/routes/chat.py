@@ -22,7 +22,7 @@ chemin partagé (chroma_db/), cf. audit §12. Ne PAS lancer avec --workers N.
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from apps.api.dependencies import get_chat_events, get_chat_use_case
+from apps.api.dependencies import get_chat_events, get_chat_events_prepare, get_chat_use_case
 from apps.api.errors import map_pipeline_exception
 from apps.api.schemas.chat import ChatRequest, ChatResponse
 from apps.api.sse import sse_lines
@@ -45,10 +45,22 @@ def chat(request: ChatRequest, use_case=Depends(get_chat_use_case)) -> ChatRespo
 
 
 @router.post("/chat/stream")
-def chat_stream(request: ChatRequest, events=Depends(get_chat_events)) -> StreamingResponse:
-    """Question -> flux SSE : event meta (sources) puis token* puis done|error."""
+def chat_stream(request: ChatRequest,
+                prepare=Depends(get_chat_events_prepare),
+                events=Depends(get_chat_events)) -> StreamingResponse:
+    """Question -> flux SSE : event meta (sources) puis token* puis done|error.
+
+    prepare() (phase bloquante : reformulation + retrieval + refus M1) est
+    appelé ICI, avant la construction de la StreamingResponse : toute erreur
+    à ce stade est une HTTPException 5xx — les en-têtes du flux ne sont jamais
+    envoyés pour rien. events() n'itère ensuite que le stream de tokens.
+    """
+    try:
+        prepared = prepare(request)  # hors du générateur : erreurs = HTTP 5xx
+    except Exception as exc:
+        raise map_pipeline_exception(exc) from exc
     return StreamingResponse(
-        sse_lines(events(request)),
+        sse_lines(events(prepared)),
         media_type=MEDIA_TYPE_SSE,
         headers=SSE_HEADERS,
     )

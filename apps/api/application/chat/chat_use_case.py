@@ -111,32 +111,41 @@ def execute_chat(request: ChatRequest) -> ChatResponse:
     return _to_response(result, conversation_id, latency_ms)
 
 
-def chat_events(request: ChatRequest) -> Iterator[tuple[str, dict]]:
-    """Générateur SYNCHRONE d'événements SSE pour POST /api/chat/stream.
+def prepare_chat(request: ChatRequest) -> tuple:
+    """Phase bloquante du flux SSE — exécutée IMMÉDIATEMENT, avant les en-têtes.
 
-    Contrat de flux (audit §8/§11) : meta -> token* -> done | error.
+    pipeline_answer(stream=True) exécute AVANT de retourner toute la partie
+    coûteuse (query processing, retrieval, refus M1) : 15-30 s sans rien
+    émettre. Cette fonction doit donc être appelée par la route AVANT de
+    construire la StreamingResponse : une erreur survenue ici (index absent,
+    Ollama injoignable) reste une erreur HTTP 5xx propre — le flux n'est
+    jamais ouvert pour rien.
 
-    Répartition temporelle dictée par le pipeline RAG existant :
-      - pipeline_answer(stream=True) exécute AVANT de retourner toute la partie
-        bloquante (query processing, retrieval, refus M1) : 15-30 s sans rien
-        émettre. C'est pourquoi la route envoie les en-têtes HTTP seulement
-        après cet appel : une erreur survenue dans cette phase reste une
-        erreur HTTP 5xx propre, pas un flux déjà ouvert.
-      - answer_stream est paresseux : chaque token est yield ici au fur et à
-        mesure de la génération Ollama.
+    Retourne (result, t0, conversation_id) pour le générateur d'événements.
     """
     conversation_id = request.conversation_id or str(uuid.uuid4())
     history = format_history([t.model_dump() for t in request.history])
-
     t0 = time.perf_counter()
-    # Phase bloquante (QP + retrieval + M1) : aucune exception ici ne doit
-    # arriver après l'ouverture du flux — la route lève avant les en-têtes.
     result = pipeline_answer(
         request.message,
         k=request.k,
         history=history,
         stream=True,
     )
+    return result, t0, conversation_id
+
+
+def chat_events(prepared: tuple) -> Iterator[tuple[str, dict]]:
+    """Générateur d'événements SSE — consomme le résultat de prepare_chat().
+
+    Contrat de flux (audit §8/§11) : meta -> token* -> done | error.
+
+    answer_stream est paresseux : chaque token est yield ici au fur et à
+    mesure de la génération Ollama. Le paramètre `prepared` est un tuple
+    simple (pas une closure) : prepare_chat() a déjà tourné quand ce
+    générateur est itéré par la StreamingResponse.
+    """
+    result, t0, conversation_id = prepared
 
     if result.refused:
         # Refus M1 (seuil reranker) : decided avant generation, aucun token.

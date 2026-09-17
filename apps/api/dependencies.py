@@ -17,7 +17,11 @@ Contient :
 import httpx  # noqa: F401  (réexport pour compat : map_pipeline_exception vivait ici)
 import ollama  # noqa: F401
 
-from apps.api.application.chat.chat_use_case import chat_events, execute_chat
+from apps.api.application.chat.chat_use_case import (
+    chat_events,
+    execute_chat,
+    prepare_chat,
+)
 from apps.api.errors import map_pipeline_exception  # noqa: F401  (réexport)
 
 
@@ -27,5 +31,10 @@ def get_chat_use_case():
 
 
 def get_chat_events():
-    """Provider du générateur d'événements SSE (POST /api/chat/stream)."""
+    """Provider du générateur d'événements SSE (itération des tokens)."""
     return chat_events
+
+
+def get_chat_events_prepare():
+    """Provider de la phase bloquante du flux SSE (avant les en-têtes)."""
+    return prepare_chat
