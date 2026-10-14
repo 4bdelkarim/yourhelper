@@ -51,17 +51,19 @@ def error_payload(exc: Exception) -> tuple[int, str, str]:
             "Le serveur Ollama est injoignable ou en erreur."
         )
 
-    # Inconnue : on LOG le traceback complet (visible via `docker compose logs api`)
-    # et on expose type + message au client. En environnement conteneurisé, les
-    # logs ne sont pas accessibles à tous — sans ce détail, un 500 « internal_error »
-    # est indirable. Le projet est un prototype local : l'exposition est assumée.
+    # Inconnue : on LOG le traceback complet côté serveur (visible via
+    # `docker compose logs api`) pour le diagnostic, mais on N'EXPOSE PAS le
+    # détail interne au client. Un endpoint public ne doit jamais renvoyer le
+    # type ni le message d'une exception Python : ils peuvent révéler des
+    # chemins, des secrets ou des internes applicatifs. Le client reçoit un
+    # message stable et générique ; la cause reste consultable dans les logs.
     logger.error(
         "Erreur interne non classifiée : %s: %s",
         type(exc).__name__, exc,
         exc_info=exc,
     )
     return status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", (
-        f"Erreur interne du tuteur ({type(exc).__name__}: {exc})"
+        "Une erreur interne est survenue. Consultez les logs du serveur."
     )
 
 

@@ -1,0 +1,49 @@
+# CI minimale — lance la suite pytest à chaque push et à chaque pull request.
+# =============================================================================
+# Objectif : garantir la suite VERTE (tests/test_*.py) après tout changement.
+#
+# Installation volontairement LÉGÈRE : la suite est conçue pour tourner sans
+# réseau ni modèle (cf. tests/conftest.py — le RAG est simulé). Les dépendances
+# lourdes du pipeline (torch, chromadb, sentence-transformers, rank-bm25) sont
+# importées PARESSEUSEMENT (dans les fonctions), donc absentes ici : la CI
+# tourne en quelques secondes au lieu de tirer ~2,5 Go de wheels CUDA.
+#
+# Socle nécessaire et suffisant (vérifié localement dans un venv propre) :
+#   - pytest                     : lanceur ;
+#   - fastapi + httpx + pydantic : app + TestClient (étoiles FastAPI) ;
+#   - ollama + requests          : importés au chargement des routes API
+#                                  (apps/api/errors.py, apps/api/routes/system.py).
+#   - `pip install -e . --no-deps` : installe le paquet `rag_tutor` (src/) sans
+#     ses dépendances lourdes, pour que `from rag_tutor.core... import` résolve.
+#
+# Si un jour un test importe une dépendance lourde au chargement, élargir la
+# liste ci-dessous (le message d'erreur de pytest pointera le module manquant).
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install minimal test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest "fastapi>=0.115.0" httpx ollama pydantic requests
+          pip install -e . --no-deps
+
+      - name: Run tests
+        run: pytest -q
