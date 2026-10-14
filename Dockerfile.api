@@ -23,13 +23,30 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# --- Bibliothèques système requises par torch ---
+# libgomp1 : runtime OpenMP de torch, absent de python:*-slim. Sans lui,
+# `import torch` échoue en conteneur et transformers masque la cause sous un
+# « ModuleNotFoundError: Could not import module 'PreTrainedModel' ».
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgomp1 \
+ && rm -rf /var/lib/apt/lists/*
+
 # --- Dépendances (couche cache : pyproject/ src/ changent rarement) ---
 COPY pyproject.toml ./
 COPY src/ ./src/
 
-RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.13.0" \
+# La pile ML est épinglée sur l'environnement local vérifié (venv du projet) :
+# un `pip install -e .` non contraint résout les dernières versions et peut
+# créer une incompatibilité torch/transformers invisible au build.
+RUN pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.13.0" \
  && pip install -e . \
- && pip install "uvicorn>=0.30.0"
+ && pip install \
+      "transformers==5.15.0" \
+      "sentence-transformers==6.0.0" \
+      "tokenizers==0.22.2" \
+      "safetensors==0.8.0" \
+      "huggingface_hub==1.16.1" \
+      "uvicorn>=0.30.0"
 
 # --- Code applicatif (couche séparée : change souvent, ne casse pas le cache pip) ---
 COPY apps/api/ ./apps/api/

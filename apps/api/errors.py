@@ -15,9 +15,13 @@ Correspond au code réel du RAG :
     (fallbacks internes assumés par le RAG existant)
 """
 
+import logging
+
 import httpx
 import ollama
 from fastapi import HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 
 def error_payload(exc: Exception) -> tuple[int, str, str]:
@@ -47,8 +51,18 @@ def error_payload(exc: Exception) -> tuple[int, str, str]:
             "Le serveur Ollama est injoignable ou en erreur."
         )
 
-    # Inconnue : ne pas exposer le détail interne au client.
-    return status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "Erreur interne du tuteur."
+    # Inconnue : on LOG le traceback complet (visible via `docker compose logs api`)
+    # et on expose type + message au client. En environnement conteneurisé, les
+    # logs ne sont pas accessibles à tous — sans ce détail, un 500 « internal_error »
+    # est indirable. Le projet est un prototype local : l'exposition est assumée.
+    logger.error(
+        "Erreur interne non classifiée : %s: %s",
+        type(exc).__name__, exc,
+        exc_info=exc,
+    )
+    return status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", (
+        f"Erreur interne du tuteur ({type(exc).__name__}: {exc})"
+    )
 
 
 def map_pipeline_exception(exc: Exception) -> HTTPException:

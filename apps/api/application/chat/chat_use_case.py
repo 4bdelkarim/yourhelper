@@ -34,6 +34,7 @@ from rag_tutor.core.pipeline import RAGResult, answer as pipeline_answer
 
 from apps.api.errors import error_payload
 from apps.api.schemas.chat import ChatRequest, ChatResponse, Source
+from rag_tutor.conversation.prompts import TUTOR_SYSTEM_PROMPT
 
 _ROLE_LABELS = {"user": "Étudiant", "assistant": "Tuteur"}
 
@@ -104,6 +105,7 @@ def execute_chat(request: ChatRequest) -> ChatResponse:
         request.message,
         k=request.k,
         history=history,
+        system_prompt=TUTOR_SYSTEM_PROMPT,
         stream=False,
     )
     latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -130,6 +132,7 @@ def prepare_chat(request: ChatRequest) -> tuple:
         request.message,
         k=request.k,
         history=history,
+        system_prompt=TUTOR_SYSTEM_PROMPT,
         stream=True,
     )
     return result, t0, conversation_id

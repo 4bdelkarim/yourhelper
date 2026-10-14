@@ -45,3 +45,9 @@ _glmocr_json/
 *.lot
 *.bbl
 *.blg
+
+# Cache HuggingFace du reranker (bge-reranker-v2-m3, ~600 Mo-2 Go) — artefact
+# TÉLÉCHARGÉ, reconstruisible, monté en volume Docker : jamais versionné
+# (même logique que chroma_db/). Un blob de 2 Go committé par erreur bloquait
+# le push (limite GitHub de 100 Mo).
+.hf-cache/
